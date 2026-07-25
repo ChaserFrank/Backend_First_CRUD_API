@@ -1,11 +1,24 @@
 from fastapi import FastAPI
 
-# Initialize the FastAPI application instance
-app = FastAPI()
+app = FastAPI(
+    title="Task API",
+    version="1.0"
+)
 
 @app.get("/")
 def read_root():
     """
-    Stage 0: Basic server heartbeat
+    Root endpoint returning API metadata.
     """
-    return {"message": "Hello, server is running!"}
+    return {
+        "name": "Task API",
+        "version": "1.0",
+        "endpoints": ["/tasks"]
+    }
+
+@app.get("/health")
+def health_check():
+    """
+    Standard health check endpoint for monitoring systems.
+    """
+    return {"status": "ok"}
