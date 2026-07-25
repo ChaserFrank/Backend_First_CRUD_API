@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, status
+from typing import Optional
+from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
 
 app = FastAPI(title="Task API", version="1.0")
@@ -6,6 +7,11 @@ app = FastAPI(title="Task API", version="1.0")
 # Pydantic schema for incoming creation requests
 class TaskCreate(BaseModel):
     title: str
+
+# Schema to update payload
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    done: Optional[bool] = None
 
 # In-memory data store (resets whenever the server restarts)
 tasks_db = [
@@ -77,3 +83,54 @@ def create_task(payload: TaskCreate):
 
     tasks_db.append(new_task)
     return new_task
+
+
+# --- STAGE 4: UPDATE & DELETE ENDPOINTS ---
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, payload: TaskUpdate):
+    """
+    Update a task's title and/or done status.
+    """
+    # Validation: user must provide at least one field to update
+    if payload.title is None and payload.done is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least 'title' or 'done' to update"
+        )
+
+    if payload.title is not None and not payload.title.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Title cannot be empty"
+        )
+
+    for task in tasks_db:
+        if task["id"] == task_id:
+            if payload.title is not None:
+                task["title"] = payload.title.strip()
+            if payload.done is not None:
+                task["done"] = payload.done
+            return task
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Task {task_id} not found"
+    )
+
+
+@app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(task_id: int):
+    """
+    Delete a task by ID. Returns 204 No Content on success.
+    """
+    for index, task in enumerate(tasks_db):
+        if task["id"] == task_id:
+            tasks_db.pop(index)
+            # HTTP 204 requires an empty body
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Task {task_id} not found"
+    )
