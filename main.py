@@ -1,9 +1,13 @@
 from contextlib import asynccontextmanager
-from typing import Optional
-from fastapi import FastAPI, HTTPException, Response, status
+from typing import Optional, Generator
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
+#Dependency to yield a database session per request
+def get_session() -> Generator[Session, None, None]:
+    with Session(engine) as session:
+        yield session
 
 # 1. Define the SQLModel (serves as both DB Table & Data Model)
 class Task(SQLModel, table=True):
@@ -53,31 +57,29 @@ def health_check():
     return {"status": "ok"}
 
 
-# --- STAGE 2: READ ENDPOINTS ---
+# --- STAGE 1: READ ENDPOINTS ---
 
 @app.get("/tasks")
-def get_tasks():
+def get_tasks(session: Session = Depends(get_session)):
     """
-    Retrieve the full list of tasks.
+    Retrieve all tasks from the SQLite database.
     """
-    return tasks_db
-
+    statement = select(Task)
+    tasks = session.exec(statement).all()
+    return tasks
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id: int):
+def get_task(task_id: int, session: Session = Depends(get_session)):
     """
-    Retrieve a single task by ID.
-    Returns 404 if the task ID does not exist.
+    Retrieve a single task by ID from the database.
     """
-    for task in tasks_db:
-        if task["id"] == task_id:
-            return task
-
-    # Standard backend rule: return 404 for missing resources
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Task {task_id} not found"
-    )
+    task = session.get(Task, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task {task_id} not found"
+        )
+    return task
 
 
 # --- STAGE 3: CREATE ENDPOINT ---
