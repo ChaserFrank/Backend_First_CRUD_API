@@ -166,3 +166,30 @@ def delete_task(task_id: int, session: Session = Depends(get_session)):
     session.delete(task)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# Bonus
+@app.get("/tasks/search")
+def search_tasks(
+        search: Optional[str] = None,
+        done: Optional[bool] = None,
+        session: Session = Depends(get_session)
+):
+    statement = select(Task)
+    if done is not None:
+        statement = statement.where(Task.done == done)
+    if search:
+        # SQL LIKE query (%search%)
+        statement = statement.where(Task.title.contains(search))
+
+    return session.exec(statement).all()
+
+
+@app.get("/stats")
+def get_stats(session: Session = Depends(get_session)):
+    total = len(session.exec(select(Task)).all())
+    completed = len(session.exec(select(Task).where(Task.done == True)).all())
+    return {
+        "total": total,
+        "completed": completed,
+        "open": total - completed
+    }
