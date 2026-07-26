@@ -4,6 +4,10 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    done: Optional[bool] = None
+
 #Dependency to yield a database session per request
 def get_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
@@ -82,7 +86,7 @@ def get_task(task_id: int, session: Session = Depends(get_session)):
     return task
 
 
-# --- STAGE 3: CREATE ENDPOINT ---
+# --- STAGE 2: CREATE ENDPOINT ---
 
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
 def create_task(payload: TaskCreate):
@@ -109,14 +113,13 @@ def create_task(payload: TaskCreate):
     return new_task
 
 
-# --- STAGE 4: UPDATE & DELETE ENDPOINTS ---
+# --- STAGE 3: UPDATE & DELETE ENDPOINTS ---
 
 @app.put("/tasks/{task_id}")
-def update_task(task_id: int, payload: TaskUpdate):
+def update_task(task_id: int, payload: TaskUpdate, session: Session = Depends(get_session)):
     """
-    Update a task's title and/or done status.
+    Update an existing task in SQLite.
     """
-    # Validation: user must provide at least one field to update
     if payload.title is None and payload.done is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -129,32 +132,37 @@ def update_task(task_id: int, payload: TaskUpdate):
             detail="Title cannot be empty"
         )
 
-    for task in tasks_db:
-        if task["id"] == task_id:
-            if payload.title is not None:
-                task["title"] = payload.title.strip()
-            if payload.done is not None:
-                task["done"] = payload.done
-            return task
+    task = session.get(Task, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task {task_id} not found"
+        )
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Task {task_id} not found"
-    )
+    # Mutate DB fields
+    if payload.title is not None:
+        task.title = payload.title.strip()
+    if payload.done is not None:
+        task.done = payload.done
+
+    session.add(task)
+    session.commit()
+    session.refresh(task)
+    return task
 
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int):
+def delete_task(task_id: int, session: Session = Depends(get_session)):
     """
-    Delete a task by ID. Returns 204 No Content on success.
+    Delete a task from SQLite.
     """
-    for index, task in enumerate(tasks_db):
-        if task["id"] == task_id:
-            tasks_db.pop(index)
-            # HTTP 204 requires an empty body
-            return Response(status_code=status.HTTP_204_NO_CONTENT)
+    task = session.get(Task, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Task {task_id} not found"
+        )
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Task {task_id} not found"
-    )
+    session.delete(task)
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
