@@ -1,24 +1,46 @@
+from contextlib import asynccontextmanager
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
+from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-app = FastAPI(title="Task API", version="1.0")
 
-# Pydantic schema for incoming creation requests
-class TaskCreate(BaseModel):
+# 1. Define the SQLModel (serves as both DB Table & Data Model)
+class Task(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
     title: str
+    done: bool = False
 
-# Schema to update payload
-class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    done: Optional[bool] = None
 
-# In-memory data store (resets whenever the server restarts)
-tasks_db = [
-    {"id": 1, "title": "Setup development environment", "done": True},
-    {"id": 2, "title": "Watch request-response lecture", "done": True},
-    {"id": 3, "title": "Build FastAPI CRUD endpoints", "done": False},
-]
+# 2. Configure SQLite Database Engine
+# connect_args={"check_same_thread": False} is required for SQLite with FastAPI
+sqlite_file_name = "tasks.db"
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
+
+
+# 3. Startup & Seeding Logic via Lifespan
+@asynccontextmanager
+async def lifespan(main: FastAPI):
+    # Create the database and tables if missing
+    SQLModel.metadata.create_all(engine)
+
+    # Seed default tasks if empty
+    with Session(engine) as session:
+        statement = select(Task)
+        existing_tasks = session.exec(statement).first()
+        if not existing_tasks:
+            initial_tasks = [
+                Task(title="Setup development environment", done=True),
+                Task(title="Watch request-response lecture", done=True),
+                Task(title="Build FastAPI CRUD endpoints", done=False),
+            ]
+            session.add_all(initial_tasks)
+            session.commit()
+    yield
+
+
+app = FastAPI(title="Task API", version="2.0", lifespan=lifespan)
 
 
 @app.get("/")
