@@ -1,105 +1,60 @@
-# Task Management API (BE-01)
+# Task Management API (BE-04)
 
-A clean, RESTful CRUD API built with FastAPI and Python.
-
----
-
-## 🛠️ Tech Stack
-
-- **Language:** Python 3.10+
-- **Framework:** FastAPI
-- **ASGI Web Server:** Uvicorn
-- **Data Validation:** Pydantic
-- **Documentation:** Swagger UI / OpenAPI (built-in at `/docs`)
+A containerized, production-ready RESTful CRUD API built with FastAPI, SQLModel, PostgreSQL, and Docker Compose.
 
 ---
-
-## 🚀 Quick Start
-
-### 1. Clone & Set Up Environment
-
-```bash
-git clone https://github.com/your-username/Backend_First_CRUD_API.git
-cd Backend_First_CRUD_API
-
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install "fastapi[standard]"
-```
-
-### 2. Run Command
-
-Start the development server with live reload:
-
-```bash
-uvicorn main:app --reload
-```
-
-The server will start listening at `http://localhost:8000`.
-
----
-
-##  Endpoint Table
-
-| HTTP Method | Path | Summary | Expected Status |
-| :--- | :--- | :--- | :--- |
-# Task Management API (BE-02)
-
-A clean, production-ready RESTful CRUD API built with FastAPI, SQLModel, and SQLite as part of the **FlyRank AI Internship** (Backend AI Engineering Track, Week 3 Assignment).
-
----
-
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Language:** Python 3.10+
 - **Framework:** FastAPI
 - **ORM / Data Layer:** SQLModel (SQLAlchemy + Pydantic)
-- **Database:** SQLite
-- **ASGI Web Server:** Uvicorn
+- **Database:** PostgreSQL (running containerized)
+- **Database Driver:** `psycopg` (binary)
+- **Containerization & Orchestration:** Docker & Docker Compose[cite: 2]
+- **Configuration & Secrets:** `python-dotenv` via `.env`[cite: 2]
 - **Documentation:** Swagger UI / OpenAPI (built-in at `/docs`)
 
 ---
 
-## 🗄️ Database Architecture
+## Database & Container Architecture
 
-### Why SQLite Was Chosen
+This assignment marks the third storage iteration of this project: **In-Memory (BE-01) → SQLite (BE-02) → Containerized PostgreSQL (BE-04)**[cite: 2].
 
-SQLite was chosen as the database engine because it is an **embedded, zero-configuration database that lives in a single local file (`tasks.db`)**, making it ideal for lightweight backend applications, local testing, and rapid development without requiring an external database server.
-
-- **Database Storage Location:** Local project root (`tasks.db`).
-- **Auto-Initialization & Seeding:** On first server boot, the application automatically creates `tasks.db` and populates it with default example tasks if the table is empty. Data now persists across server restarts.
+### Key Architectural Highlights
+- **Storage Decoupling:** Because of clean data layering, swapping SQLite for PostgreSQL required zero changes to API route definitions and endpoint logic[cite: 2].
+- **Data Persistence:** PostgreSQL runs inside a dedicated Docker container[cite: 2]. A named Docker volume (`taskdata`) is mounted to `/var/lib/postgresql/data` to ensure all task data persists across container restarts (`docker compose down` followed by `docker compose up`)[cite: 2].
+- **Secrets Management:** Sensitive credentials are kept out of source control using `.env` (git-ignored)[cite: 2]. A template `.env.example` file is committed to track required environment keys[cite: 2].
+- **Single-Command Stack:** Docker Compose coordinates both the FastAPI service (`api`) and PostgreSQL database (`db`) on an isolated container network[cite: 2].
 
 ---
 
-## 🚀 Quick Start
+## Quick Start (One-Command Stack)
 
-### 1. Clone & Set Up Environment
+### 1. Clone & Configure Secrets
 
 ```bash
-git clone https://github.com/your-username/Backend_First_CRUD_API.git
+git clone [https://github.com/your-username/Backend_First_CRUD_API.git](https://github.com/your-username/Backend_First_CRUD_API.git)
 cd Backend_First_CRUD_API
 
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Copy template environment variables
+cp .env.example .env
 
-# Install dependencies
-pip install "fastapi[standard]" sqlmodel
+---
 ```
 
-### 2. Run Command
-
-Start the development server with live reload:
+### 2. Launch the Stack
+Start both the API container and the PostgreSQL database container with one command
 
 ```bash
-uvicorn main:app --reload
+docker compose up
 ```
 
-The server will automatically initialize `tasks.db` on launch and listen at http://localhost:8000.
+The server will automatically wait for the database, run table migrations/seeding, and start listening at http://localhost:8000
 
+To stop the stack while preserving database contents:
+```bash
+docker compose down
+```
 ---
 
 ##  Endpoint Table
@@ -116,29 +71,17 @@ The server will automatically initialize `tasks.db` on launch and listen at http
 
 ---
 
-## 🔍 SQL Database Exploration
+## Application Screenshots
 
-Example queries executed directly against `tasks.db` via a SQLite database viewer:
+### Data in the database
+![Database Viewer](./screenshots/Database_Viewer.png)
 
-```sql
--- 1. List every task
-SELECT * FROM tasks;
+### Interactive Swagger UI
+![Swagger UI](./screenshots/Swagger_UI.png)
 
--- 2. Show only completed tasks (1 = True)
-SELECT * FROM tasks WHERE done = 1;
+### Curl Output
+![Curl Output](./screenshots/Curl_Output.png)
 
--- 3. Count total tasks
-SELECT COUNT(*) FROM tasks;
-```
-
----
-
-## Screenshots
-
-- Database Viewer (SQLite)
-- Interactive Swagger UI
-
-FastAPI automatically generates interactive API documentation powered by OpenAPI.
 
 Visit http://localhost:8000/docs in your browser to inspect and test all CRUD endpoints interactively.
 
@@ -150,7 +93,7 @@ Below is a sample output from querying a single task using `curl -i http://local
 
 ```http
 HTTP/1.1 200 OK
-date: Sat, 25 Jul 2026 15:30:00 GMT
+date: Tue, 11 Augv 2026 09:30:00 GMT
 server: uvicorn
 content-length: 63
 content-type: application/json

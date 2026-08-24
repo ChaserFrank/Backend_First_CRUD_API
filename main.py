@@ -1,33 +1,28 @@
+import os
+import psycopg2
 from contextlib import asynccontextmanager
 from typing import Optional, Generator
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    done: Optional[bool] = None
+# Load environment variables from .env file
+load_dotenv()
 
-#Dependency to yield a database session per request
-def get_session() -> Generator[Session, None, None]:
-    with Session(engine) as session:
-        yield session
 
-# 1. Define the SQLModel (serves as both DB Table & Data Model)
+# Read Database Connection String from environment variable
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+engine = create_engine(DATABASE_URL, echo=True)
+
 class Task(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str
     done: bool = False
 
 
-# 2. Configure SQLite Database Engine
-# connect_args={"check_same_thread": False} is required for SQLite with FastAPI
-sqlite_file_name = "tasks.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
-
-
-# 3. Startup & Seeding Logic via Lifespan
+# Startup & Seeding Logic via Lifespan
 @asynccontextmanager
 async def lifespan(main: FastAPI):
     # Create the database and tables if missing
@@ -50,6 +45,9 @@ async def lifespan(main: FastAPI):
 
 app = FastAPI(title="Task API", version="2.0", lifespan=lifespan)
 
+def get_session() -> Generator[Session, None, None]:
+    with Session(engine) as session:
+        yield session
 
 @app.get("/")
 def read_root():
@@ -60,8 +58,16 @@ def read_root():
 def health_check():
     return {"status": "ok"}
 
+# --- Request Schemas ---
+class TaskCreate(BaseModel):
+    title: str
 
-# --- STAGE 1: READ ENDPOINTS ---
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    done: Optional[bool] = None
+
+
+# --- STAGE 2: READ ENDPOINTS ---
 
 @app.get("/tasks")
 def get_tasks(session: Session = Depends(get_session)):
@@ -69,8 +75,7 @@ def get_tasks(session: Session = Depends(get_session)):
     Retrieve all tasks from the SQLite database.
     """
     statement = select(Task)
-    tasks = session.exec(statement).all()
-    return tasks
+    return session.exec(statement).all()
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int, session: Session = Depends(get_session)):
@@ -167,29 +172,29 @@ def delete_task(task_id: int, session: Session = Depends(get_session)):
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-# Bonus
-@app.get("/tasks/search")
-def search_tasks(
-        search: Optional[str] = None,
-        done: Optional[bool] = None,
-        session: Session = Depends(get_session)
-):
-    statement = select(Task)
-    if done is not None:
-        statement = statement.where(Task.done == done)
-    if search:
-        # SQL LIKE query (%search%)
-        statement = statement.where(Task.title.contains(search))
-
-    return session.exec(statement).all()
-
-
-@app.get("/stats")
-def get_stats(session: Session = Depends(get_session)):
-    total = len(session.exec(select(Task)).all())
-    completed = len(session.exec(select(Task).where(Task.done == True)).all())
-    return {
-        "total": total,
-        "completed": completed,
-        "open": total - completed
-    }
+# # Bonus
+# @app.get("/tasks/search")
+# def search_tasks(
+#         search: Optional[str] = None,
+#         done: Optional[bool] = None,
+#         session: Session = Depends(get_session)
+# ):
+#     statement = select(Task)
+#     if done is not None:
+#         statement = statement.where(Task.done == done)
+#     if search:
+#         # SQL LIKE query (%search%)
+#         statement = statement.where(Task.title.contains(search))
+#
+#     return session.exec(statement).all()
+#
+#
+# @app.get("/stats")
+# def get_stats(session: Session = Depends(get_session)):
+#     total = len(session.exec(select(Task)).all())
+#     completed = len(session.exec(select(Task).where(Task.done == True)).all())
+#     return {
+#         "total": total,
+#         "completed": completed,
+#         "open": total - completed
+#     }
