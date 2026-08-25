@@ -12,6 +12,10 @@ from supabase import create_client, Client
 # Load environment variables from .env file
 load_dotenv()
 
+app = FastAPI(title="Task API with Auth",
+              description="Containerized CRUD API integrated with Supabase Authentication and Bearer Guarding.",
+              version="2.0" )
+
 # --- Add near top of main.py ---
 SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
 SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
@@ -52,31 +56,151 @@ class AuthPayload(BaseModel):
     password: str
 
 
-# Startup & Seeding Logic via Lifespan
-@asynccontextmanager
-async def lifespan(main: FastAPI):
-    # Create the database and tables if missing
-    SQLModel.metadata.create_all(engine)
+# ==============================================================================
+# 3. SECURITY DEPENDENCY (Middleware Guard for Token Verification)
+# ==============================================================================
 
-    # Seed default tasks if empty
-    with Session(engine) as session:
-        statement = select(Task)
-        existing_tasks = session.exec(statement).first()
-        if not existing_tasks:
-            initial_tasks = [
-                Task(title="Setup development environment", done=True),
-                Task(title="Watch request-response lecture", done=True),
-                Task(title="Build FastAPI CRUD endpoints", done=False),
-            ]
-            session.add_all(initial_tasks)
-            session.commit()
-    yield
+# HTTPBearer automatically configures the OpenAPI/Swagger UI "Authorize" padlock button
+security_scheme = HTTPBearer(auto_error=False)
 
 
-app = FastAPI(title="Task API with Auth",
-              description="Containerized CRUD API integrated with Supabase Authentication and Bearer Guarding.",
-              version="2.0",
-              lifespan=lifespan )
+async def get_current_user(
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
+) -> Dict[str, Any]:
+    """
+    Reusable FastAPI Security Dependency (Guard).
+
+    1. Extracts Bearer token from 'Authorization: Bearer <token>' header.
+    2. Rejects missing or malformed headers with 401 Unauthorized.
+    3. Verifies token integrity against Supabase Auth.
+    4. Injects user metadata directly into protected route signatures.
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Access token required"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+
+    try:
+        # Call Supabase SDK to decode and verify JWT signature
+        response = supabase.auth.get_user(token)
+
+        if not response or not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "Invalid or expired token"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Return sanitized user information to attached endpoints
+        return {
+            "id": response.user.id,
+            "email": response.user.email,
+            "created_at": str(response.user.created_at)
+        }
+
+    except Exception:
+        # Catch SDK token verification failures (tampered, expired, or malformed)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Invalid or expired token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# ==============================================================================
+# 4. AUTHENTICATION ENDPOINTS (Open Routes)
+# ==============================================================================
+
+@app.post("/auth/signup", status_code=status.HTTP_201_CREATED)
+def signup(payload: AuthPayload):
+    if not payload.email.strip() or not payload.password.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "Email and password are required."}
+        )
+    try:
+        response = supabase.auth.sign_up({
+            "email": payload.email.strip(),
+            "password": payload.password.strip()
+        })
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"error": "User registration failed."}
+            )
+        return {
+            "message": "User created successfully",
+            "user": {"id": response.user.id, "email": response.user.email}
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": str(e)}
+        )
+
+@app.post("/auth/login", status_code=status.HTTP_200_OK)
+def login(payload: AuthPayload):
+    if not payload.email.strip() or not payload.password.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "Email and password are required."}
+        )
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": payload.email.strip(),
+            "password": payload.password.strip()
+        })
+        if not response.session:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "Invalid login credentials"}
+            )
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token,
+            "token_type": "bearer",
+            "expires_in": response.session.expires_in
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Invalid login credentials"}
+        )
+
+@app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout():
+    try:
+        supabase.auth.sign_out()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except Exception:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# # Startup & Seeding Logic via Lifespan
+# @asynccontextmanager
+# async def lifespan(main: FastAPI):
+#     # Create the database and tables if missing
+#     SQLModel.metadata.create_all(engine)
+#
+#     # Seed default tasks if empty
+#     with Session(engine) as session:
+#         statement = select(Task)
+#         existing_tasks = session.exec(statement).first()
+#         if not existing_tasks:
+#             initial_tasks = [
+#                 Task(title="Setup development environment", done=True),
+#                 Task(title="Watch request-response lecture", done=True),
+#                 Task(title="Build FastAPI CRUD endpoints", done=False),
+#             ]
+#             session.add_all(initial_tasks)
+#             session.commit()
+#     yield
+
+
+
 
 def get_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
