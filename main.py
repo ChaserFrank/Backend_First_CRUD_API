@@ -56,59 +56,59 @@ class AuthPayload(BaseModel):
     password: str
 
 
-# ==============================================================================
-# 3. SECURITY DEPENDENCY (Middleware Guard for Token Verification)
-# ==============================================================================
-
-# HTTPBearer automatically configures the OpenAPI/Swagger UI "Authorize" padlock button
-security_scheme = HTTPBearer(auto_error=False)
-
-
-async def get_current_user(
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
-) -> Dict[str, Any]:
-    """
-    Reusable FastAPI Security Dependency (Guard).
-
-    1. Extracts Bearer token from 'Authorization: Bearer <token>' header.
-    2. Rejects missing or malformed headers with 401 Unauthorized.
-    3. Verifies token integrity against Supabase Auth.
-    4. Injects user metadata directly into protected route signatures.
-    """
-    if not credentials or not credentials.credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "Access token required"},
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    token = credentials.credentials
-
-    try:
-        # Call Supabase SDK to decode and verify JWT signature
-        response = supabase.auth.get_user(token)
-
-        if not response or not response.user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"error": "Invalid or expired token"},
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Return sanitized user information to attached endpoints
-        return {
-            "id": response.user.id,
-            "email": response.user.email,
-            "created_at": str(response.user.created_at)
-        }
-
-    except Exception:
-        # Catch SDK token verification failures (tampered, expired, or malformed)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "Invalid or expired token"},
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+# # ==============================================================================
+# # 3. SECURITY DEPENDENCY (Middleware Guard for Token Verification)
+# # ==============================================================================
+#
+# # HTTPBearer automatically configures the OpenAPI/Swagger UI "Authorize" padlock button
+# security_scheme = HTTPBearer(auto_error=False)
+#
+#
+# async def get_current_user(
+#         credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
+# ) -> Dict[str, Any]:
+#     """
+#     Reusable FastAPI Security Dependency (Guard).
+#
+#     1. Extracts Bearer token from 'Authorization: Bearer <token>' header.
+#     2. Rejects missing or malformed headers with 401 Unauthorized.
+#     3. Verifies token integrity against Supabase Auth.
+#     4. Injects user metadata directly into protected route signatures.
+#     """
+#     if not credentials or not credentials.credentials:
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail={"error": "Access token required"},
+#             headers={"WWW-Authenticate": "Bearer"},
+#         )
+#
+#     token = credentials.credentials
+#
+#     try:
+#         # Call Supabase SDK to decode and verify JWT signature
+#         response = supabase.auth.get_user(token)
+#
+#         if not response or not response.user:
+#             raise HTTPException(
+#                 status_code=status.HTTP_401_UNAUTHORIZED,
+#                 detail={"error": "Invalid or expired token"},
+#                 headers={"WWW-Authenticate": "Bearer"},
+#             )
+#
+#         # Return sanitized user information to attached endpoints
+#         return {
+#             "id": response.user.id,
+#             "email": response.user.email,
+#             "created_at": str(response.user.created_at)
+#         }
+#
+#     except Exception:
+#         # Catch SDK token verification failures (tampered, expired, or malformed)
+#         raise HTTPException(
+#             status_code=status.HTTP_401_UNAUTHORIZED,
+#             detail={"error": "Invalid or expired token"},
+#             headers={"WWW-Authenticate": "Bearer"},
+#         )
 
 
 # ==============================================================================
@@ -211,6 +211,40 @@ def get_protected_dashboard(current_user: Dict[str, Any] = Depends(get_current_u
         "message": f"Welcome to your private dashboard, {current_user['email']}!",
         "user_id": current_user["id"]
     }
+
+
+security_scheme = HTTPBearer(auto_error=False)
+
+
+async def get_current_user(
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
+) -> Dict[str, Any]:
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Access token required"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+    try:
+        response = supabase.auth.get_user(token)
+        if not response or not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "Invalid or expired token"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return {
+            "id": response.user.id,
+            "email": response.user.email
+        }
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Invalid or expired token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 # # Startup & Seeding Logic via Lifespan
 # @asynccontextmanager
