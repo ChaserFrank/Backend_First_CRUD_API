@@ -1,25 +1,55 @@
 import os
 import psycopg2
 from contextlib import asynccontextmanager
-from typing import Optional, Generator
+from typing import Any, Dict, Optional, Generator
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Response, status
-from pydantic import BaseModel
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, EmailStr
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+from supabase import create_client, Client
 
 # Load environment variables from .env file
 load_dotenv()
 
+# --- Add near top of main.py ---
+SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
+SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
+
+# Initialize and verify connection
+try:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in environment variables.")
+
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    # Visual checkpoint log
+    print("\n" + "=" * 50)
+    print("⚡ Server running and connected to Supabase!")
+    print("=" * 50 + "\n")
+
+except Exception as e:
+    print(f"\n❌ Supabase Connection Failed: {e}\n")
+    raise e
 
 # Read Database Connection String from environment variable
-DATABASE_URL = os.getenv("DATABASE_URL")
+# DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL, echo=True)
+# engine = create_engine(DATABASE_URL, echo=True)
 
-class Task(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    title: str
-    done: bool = False
+# class Task(SQLModel, table=True):
+#     id: Optional[int] = Field(default=None, primary_key=True)
+#     title: str
+#     done: bool =
+
+# ==============================================================================
+# 2. REQUEST & RESPONSE SCHEMAS (Data Validation Layer)
+# ==============================================================================
+
+class AuthPayload(BaseModel):
+    """Schema for incoming authentication requests."""
+    email: str
+    password: str
 
 
 # Startup & Seeding Logic via Lifespan
@@ -43,7 +73,10 @@ async def lifespan(main: FastAPI):
     yield
 
 
-app = FastAPI(title="Task API", version="2.0", lifespan=lifespan)
+app = FastAPI(title="Task API with Auth",
+              description="Containerized CRUD API integrated with Supabase Authentication and Bearer Guarding.",
+              version="2.0",
+              lifespan=lifespan )
 
 def get_session() -> Generator[Session, None, None]:
     with Session(engine) as session:
@@ -93,37 +126,30 @@ def get_task(task_id: int, session: Session = Depends(get_session)):
 
 # --- STAGE 2: CREATE ENDPOINT ---
 
+# --- Replace existing create_task function ---
 @app.post("/tasks", status_code=status.HTTP_201_CREATED)
-def create_task(payload: TaskCreate):
+def create_task(payload: TaskCreate, session: Session = Depends(get_session)):
     """
-    Create a new task with input validation.
+    Create a new task in PostgreSQL with input validation.
     """
-    # Business rule validation: title cannot be empty or whitespace
     if not payload.title or not payload.title.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Title is required and cannot be empty"
         )
 
-    # Compute next unique ID safely
-    next_id = max([t["id"] for t in tasks_db], default=0) + 1
-
-    new_task = {
-        "id": next_id,
-        "title": payload.title.strip(),
-        "done": False
-    }
-
-    tasks_db.append(new_task)
-    return new_task
-
+    db_task = Task(title=payload.title.strip())
+    session.add(db_task)
+    session.commit()
+    session.refresh(db_task)
+    return db_task
 
 # --- STAGE 3: UPDATE & DELETE ENDPOINTS ---
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, payload: TaskUpdate, session: Session = Depends(get_session)):
     """
-    Update an existing task in SQLite.
+    Update an existing task in PostgreSQL.
     """
     if payload.title is None and payload.done is None:
         raise HTTPException(
@@ -159,7 +185,7 @@ def update_task(task_id: int, payload: TaskUpdate, session: Session = Depends(ge
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(task_id: int, session: Session = Depends(get_session)):
     """
-    Delete a task from SQLite.
+    Delete a task from PostgreSQL.
     """
     task = session.get(Task, task_id)
     if not task:
