@@ -179,6 +179,39 @@ def logout():
     except Exception:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+# ==============================================================================
+# 5. PUBLIC & PROTECTED ROUTES
+# ==============================================================================
+
+@app.get("/public/info", status_code=status.HTTP_200_OK)
+def get_public_info():
+    """Unprotected endpoint accessible to any anonymous client."""
+    return {"message": "Welcome stranger! This info is public."}
+
+
+@app.get("/protected/profile", status_code=status.HTTP_200_OK)
+def get_protected_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Protected Endpoint: Returns verified identity metadata extracted from JWT.
+    Guarded by 'Depends(get_current_user)' dependency.
+    """
+    return {
+        "message": "Access granted to private profile",
+        "user": current_user
+    }
+
+
+@app.get("/protected/dashboard", status_code=status.HTTP_200_OK)
+def get_protected_dashboard(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """
+    Secondary Protected Endpoint demonstrating security dependency reusability.
+    Zero duplicated authentication logic required.
+    """
+    return {
+        "message": f"Welcome to your private dashboard, {current_user['email']}!",
+        "user_id": current_user["id"]
+    }
+
 # # Startup & Seeding Logic via Lifespan
 # @asynccontextmanager
 # async def lifespan(main: FastAPI):
