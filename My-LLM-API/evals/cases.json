@@ -1,0 +1,34 @@
+[
+  {
+    "input": "STARBUCKS STORE #1234 2026-09-10 Coffee $4.50",
+    "expected": {"category": "food", "needs_review": false}
+  },
+  {
+    "input": "GITHUB INC. 01/01/2026 Copilot Subscription Total: 10.00 USD",
+    "expected": {"category": "software", "needs_review": false}
+  },
+  {
+    "input": "UBER TRIP 09/05/2026 $24.15",
+    "expected": {"category": "transport", "needs_review": false}
+  },
+  {
+    "input": "STAPLES Paper and Pens 12/12/2025 45.99",
+    "expected": {"category": "office_supplies", "needs_review": false}
+  },
+  {
+    "input": "Handwritten note: paid Bob 50 bucks for fixing the thing",
+    "expected": {"category": "other", "needs_review": true}
+  },
+  {
+    "input": "AWS AMZN.COM BILLING 2026-08-01 105.50",
+    "expected": {"category": "software", "needs_review": false}
+  },
+  {
+    "input": "MCDONALDS Drive Thru - total missing but bought a burger",
+    "expected": {"category": "food", "needs_review": true}
+  },
+  {
+    "input": "ACME CORP - Bought a highly experimental laser for $999.99 on 2026-09-10",
+    "expected": {"category": "other", "needs_review": false}
+  }
+]
