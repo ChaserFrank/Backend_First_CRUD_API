@@ -34,3 +34,4 @@ htmlcov/
 # OS Specific
 .DS_Store
 Thumbs.db
+tasks.db
