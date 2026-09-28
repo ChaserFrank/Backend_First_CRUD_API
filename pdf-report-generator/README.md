@@ -322,7 +322,7 @@ The screenshot demonstrate that:
 Example:
 
 ```markdown
-![Generated PDF](docs/generated-report.png)
+![Generated PDF](./docs/generated-report.png)
 ```
 ---
 
