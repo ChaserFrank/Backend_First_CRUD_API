@@ -311,7 +311,7 @@ sales_report.pdf
 
 ### Generated PDF
 
-The screenshot demonstrate that:
+The screenshot demonstrates that:
 
 - The HTML template rendered correctly.
 - Tables fit within the page.
@@ -319,11 +319,7 @@ The screenshot demonstrate that:
 - Headers and report sections are correctly formatted.
 - The generated document is readable.
 
-Example:
-
-```markdown
 ![Generated PDF](docs/generated-report.png)
-```
 ---
 
 ## Technologies
