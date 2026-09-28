@@ -1,0 +1,23 @@
+# Generated artifacts and databases (Required by assignment)[cite: 4]
+reports/
+report.db
+
+# Python environment and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+
+# Environment variables (Security)
+.env
+.env.local
+
+# OS generated files
+.DS_Store
+Thumbs.db
